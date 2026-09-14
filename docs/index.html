@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VALORANT HUB</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-white min-h-screen p-4">
+  <div id="app" class="max-w-2xl mx-auto space-y-6">
+
+    <!-- 頂部標題與導覽區 -->
+    <header class="flex flex-col sm:flex-row justify-between items-center border-b border-slate-700 pb-4 gap-4">
+      <h1 class="text-2xl font-extrabold text-red-500 tracking-wider">VALORANT HUB</h1>
+      <nav v-if="isLoggedIn" class="flex flex-wrap gap-1.5 bg-slate-800 p-1.5 rounded-lg text-xs sm:text-sm">
+        <button @click="tab = 'store'" :class="['px-3 py-1.5 rounded transition', tab === 'store' ? 'bg-red-600 font-bold' : 'hover:bg-slate-700']">今日商店</button>
+        <button @click="tab = 'history'" :class="['px-3 py-1.5 rounded transition', tab === 'history' ? 'bg-red-600 font-bold' : 'hover:bg-slate-700']">商店紀錄</button>
+        <button @click="tab = 'career'" :class="['px-3 py-1.5 rounded transition', tab === 'career' ? 'bg-red-600 font-bold' : 'hover:bg-slate-700']">戰績排位</button>
+        <button @click="tab = 'agent'" :class="['px-3 py-1.5 rounded transition', tab === 'agent' ? 'bg-red-600 font-bold' : 'hover:bg-slate-700']">秒鎖特務</button>
+        <button @click="tab = 'chat'" :class="['px-3 py-1.5 rounded transition', tab === 'chat' ? 'bg-red-600 font-bold' : 'hover:bg-slate-700']">大廳聊天</button>
+        <button @click="tab = 'profile'" :class="['px-3 py-1.5 rounded transition', tab === 'profile' ? 'bg-red-600 font-bold' : 'hover:bg-slate-700']">個人資訊</button>
+      </nav>
+    </header>
+
+    <!-- 登入區塊：完全無文字框，直接官方認證 -->
+    <div v-if="!isLoggedIn" class="bg-slate-800 p-8 rounded-2xl border border-slate-700 space-y-6 text-center max-w-md mx-auto my-12">
+      <div class="space-y-2">
+        <h2 class="text-2xl font-bold">歡迎使用 VALORANT HUB</h2>
+        <p class="text-xs text-slate-400">本工具透過 Riot 官方 Sign-On 安全驗證，不會經過或儲存你的帳號與密碼。</p>
+      </div>
+      
+      <button @click="loginWithRiot" class="w-full bg-red-600 hover:bg-red-500 py-3.5 rounded-xl font-extrabold text-lg transition shadow-lg shadow-red-900/30 flex items-center justify-center gap-2">
+        <span>透過 Riot Games 官方登入</span>
+      </button>
+
+      <p class="text-xs text-slate-500">點擊後將跳轉至 Riot 官方登入頁面 (auth.riotgames.com)</p>
+    </div>
+
+    <!-- 登入後的主介面 -->
+    <template v-else>
+      
+      <!-- 1. 今日商店 (含評分與心願單) -->
+      <section v-if="tab === 'store'" class="space-y-4">
+        <div class="flex justify-between items-center">
+          <h2 class="text-xl font-bold">🛒 每日輪播商店</h2>
+          <span class="text-xs text-slate-400">每天 08:00 AM 重置</span>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div v-for="skin in dailySkins" :key="skin.id" class="bg-slate-800 border border-slate-700 p-4 rounded-xl relative flex flex-col justify-between space-y-3">
+            <div>
+              <div class="flex justify-between items-start">
+                <h3 class="font-bold text-lg leading-tight">{{ skin.name }}</h3>
+                <button @click="toggleWishlist(skin)" class="text-xl leading-none">
+                  {{ isWishlisted(skin.id) ? '⭐' : '☆' }}
+                </button>
+              </div>
+              <p class="text-yellow-400 font-bold text-sm">{{ skin.price }} VP</p>
+            </div>
+
+            <img :src="skin.icon" class="h-24 mx-auto object-contain my-2">
+
+            <div class="pt-2 border-t border-slate-700 flex justify-between items-center text-xs">
+              <span class="text-slate-400">我的評分：</span>
+              <div class="flex gap-1">
+                <button v-for="star in 5" :key="star" @click="rateSkin(skin.id, star)" class="text-base">
+                  {{ (ratings[skin.id] || 0) >= star ? '★' : '☆' }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. 商店歷史紀錄 -->
+      <section v-if="tab === 'history'" class="space-y-4">
+        <h2 class="text-xl font-bold">📅 歷年商店紀錄</h2>
+        <div class="space-y-3">
+          <div v-for="record in storeHistory" :key="record.date" class="bg-slate-800 p-4 rounded-xl border border-slate-700 space-y-2">
+            <p class="text-xs font-bold text-slate-400 border-b border-slate-700 pb-1">{{ record.date }}</p>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+              <div v-for="item in record.items" :key="item.name" class="bg-slate-900 p-2 rounded border border-slate-800">
+                <p class="font-bold truncate">{{ item.name }}</p>
+                <p class="text-yellow-400">{{ item.price }} VP</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. 戰績與排位 -->
+      <section v-if="tab === 'career'" class="space-y-4">
+        <h2 class="text-xl font-bold">📊 個人競技數據與歷史戰績</h2>
+        <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 flex items-center gap-4">
+          <div class="bg-slate-700 w-16 h-16 rounded-full flex items-center justify-center font-bold text-xl text-yellow-400">金牌 3</div>
+          <div>
+            <p class="text-lg font-bold">{{ profile.gameName }}#{{ profile.tagLine }}</p>
+            <p class="text-sm text-slate-400">近期勝率：58% | KD 比：1.15</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. 秒鎖特務 -->
+      <section v-if="tab === 'agent'" class="space-y-4">
+        <h2 class="text-xl font-bold">⚡ 快速秒鎖 / 預選特務</h2>
+        <div class="grid grid-cols-3 gap-3">
+          <button v-for="agent in ['Jett', 'Reyna', 'Chamber', 'Clove', 'Omen', 'Fade']" 
+                  @click="selectedAgent = agent"
+                  :class="['p-3 rounded-xl border text-center font-bold transition', selectedAgent === agent ? 'border-red-500 bg-red-950/50' : 'border-slate-700 bg-slate-800']">
+            {{ agent }}
+          </button>
+        </div>
+      </section>
+
+      <!-- 5. 大廳聊天 -->
+      <section v-if="tab === 'chat'" class="space-y-4">
+        <h2 class="text-xl font-bold">💬 遊戲內大廳 / 隊伍聊天室</h2>
+        <div class="bg-slate-800 h-48 rounded-xl p-3 overflow-y-auto space-y-2 border border-slate-700 text-sm">
+          <p v-for="msg in chatLogs" :key="msg.time">
+            <span class="text-slate-500">[{{ msg.time }}]</span> 
+            <span class="text-blue-400 font-bold">{{ msg.sender }}:</span> {{ msg.text }}
+          </p>
+        </div>
+        <div class="flex gap-2">
+          <input v-model="newMessage" type="text" placeholder="發送訊息至隊伍..." class="flex-1 bg-slate-800 border border-slate-700 rounded-lg p-2 text-white">
+          <button @click="sendMessage" class="bg-red-600 hover:bg-red-500 px-4 rounded-lg font-bold">發送</button>
+        </div>
+      </section>
+
+      <!-- 6. 個人資訊 (Profile) -->
+      <section v-if="tab === 'profile'" class="space-y-4">
+        <h2 class="text-xl font-bold">👤 個人資訊與系統設定</h2>
+        <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 space-y-4">
+          <div class="flex items-center gap-4">
+            <img :src="profile.cardIcon" class="w-16 h-16 rounded-lg border border-slate-600 object-cover">
+            <div>
+              <h3 class="text-xl font-extrabold">{{ profile.gameName }} <span class="text-slate-400 text-sm">#{{ profile.tagLine }}</span></h3>
+              <p class="text-xs bg-red-900/60 text-red-300 px-2 py-0.5 rounded border border-red-700 inline-block mt-1">等級 {{ profile.accountLevel }}</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3 pt-2">
+            <div class="bg-slate-900 p-3 rounded-lg border border-slate-800">
+              <p class="text-xs text-slate-400">Valorant 點數 (VP)</p>
+              <p class="text-lg font-bold text-yellow-400">{{ profile.vp }} VP</p>
+            </div>
+            <div class="bg-slate-900 p-3 rounded-lg border border-slate-800">
+              <p class="text-xs text-slate-400">輻能點數 (RP)</p>
+              <p class="text-lg font-bold text-cyan-400">{{ profile.rp }} RP</p>
+            </div>
+          </div>
+
+          <button @click="logout" class="w-full bg-slate-700 hover:bg-slate-600 py-2 rounded-lg font-bold text-xs transition text-slate-300">
+            登出官方帳號
+          </button>
+        </div>
+      </section>
+
+    </template>
+
+  </div>
+
+  <script>
+    const { createApp, ref, onMounted } = Vue;
+    createApp({
+      setup() {
+        const tab = ref('store');
+        const isLoggedIn = ref(false);
+        const selectedAgent = ref('Jett');
+        const newMessage = ref('');
+
+        const profile = ref({
+          gameName: 'RiotPlayer',
+          tagLine: 'TW1',
+          accountLevel: 128,
+          vp: 2450,
+          rp: 120,
+          cardIcon: 'https://media.valorant-api.com/playercards/9fb348bc-41ea-4378-41ab-e19a09212684/displayicon.png'
+        });
+
+        const ratings = ref(JSON.parse(localStorage.getItem('val_ratings') || '{}'));
+        const wishlist = ref(JSON.parse(localStorage.getItem('val_wishlist') || '[]'));
+
+        const dailySkins = ref([
+          { id: '1', name: '掠奪印象 狂徒', price: 1775, icon: 'https://media.valorant-api.com/weaponskinlevels/42242363-441f-4790-50d4-a8acb34479e0/displayicon.png' },
+          { id: '2', name: '惡鬼 幻象', price: 1775, icon: 'https://media.valorant-api.com/weaponskinlevels/d13f98ed-4c07-44f2-95f0-aa1e93813876/displayicon.png' }
+        ]);
+
+        const storeHistory = ref([
+          {
+            date: '2026-09-14 (今天)',
+            items: [
+              { name: '掠奪印象 狂徒', price: 1775 },
+              { name: '惡鬼 幻象', price: 1775 },
+              { name: '混沌特攻 警長', price: 2175 },
+              { name: '蓋亞的復仇 捍衛者', price: 1775 }
+            ]
+          }
+        ]);
+
+        const chatLogs = ref([{ time: '12:00', sender: '系統', text: '已成功連線至隊伍聊天頻道' }]);
+
+        // 官方 RSO 登入觸發：跳轉至 Riot 認證頁面
+        const loginWithRiot = () => {
+          const redirectUri = encodeURIComponent(window.location.origin + window.location.pathname);
+          const authUrl = `https://auth.riotgames.com/authorize?client_id=play-valorant-web-prod&redirect_uri=${redirectUri}&response_type=token%20id_token&scope=openid%20offline_access`;
+          window.location.href = authUrl;
+        };
+
+        // 頁面載入時解析 Token
+        onMounted(() => {
+          const hash = window.location.hash;
+          if (hash && hash.includes('access_token')) {
+            const params = new URLSearchParams(hash.replace('#', '?'));
+            const token = params.get('access_token');
+            if (token) {
+              localStorage.setItem('riot_token', token);
+              window.history.replaceState(null, null, window.location.pathname);
+              isLoggedIn.value = true;
+            }
+          } else if (localStorage.getItem('riot_token')) {
+            isLoggedIn.value = true;
+          }
+        });
+
+        const logout = () => {
+          localStorage.removeItem('riot_token');
+          isLoggedIn.value = false;
+        };
+
+        const rateSkin = (skinId, score) => {
+          ratings.value[skinId] = score;
+          localStorage.setItem('val_ratings', JSON.stringify(ratings.value));
+        };
+
+        const toggleWishlist = (skin) => {
+          const idx = wishlist.value.findIndex(i => i.id === skin.id);
+          if (idx > -1) {
+            wishlist.value.splice(idx, 1);
+          } else {
+            wishlist.value.push({ id: skin.id, name: skin.name });
+          }
+          localStorage.setItem('val_wishlist', JSON.stringify(wishlist.value));
+        };
+
+        const isWishlisted = (id) => wishlist.value.some(i => i.id === id);
+
+        const sendMessage = () => {
+          if (!newMessage.value) return;
+          chatLogs.value.push({
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            sender: '你',
+            text: newMessage.value
+          });
+          newMessage.value = '';
+        };
+
+        return { 
+          tab, isLoggedIn, selectedAgent, newMessage, chatLogs, dailySkins, storeHistory, 
+          profile, ratings, wishlist, loginWithRiot, logout, rateSkin, toggleWishlist, isWishlisted, sendMessage 
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
